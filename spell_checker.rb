@@ -1,9 +1,14 @@
+# Score calculation in this model
+#  
+#    Score = Frequency/( total_freq * word_count_in_correction_list )
+
+
 require 'mysql' 
 
 def train features
   model = Hash.new(1)
   features.each_hash{|h| 
-    model[h['name'].downcase] = Float(h['freq'])
+    model[h['name'].downcase] = Math::log((Float(h['freq'])))
     #puts Float(h['freq'])
   }
 
@@ -45,7 +50,6 @@ def known words
 end
 
 def correct word
-
   unless (edits1_candidate = (known(edits1(word)))).nil? 
     edits1_candidate = (known(edits1(word))).uniq
   end
@@ -60,15 +64,15 @@ def correct word
     edits2_candidate = nil
   end
 
-  puts "Entered Word"
-  puts word
-  puts
+  # puts "Entered Word"
+  # puts word
+  # puts
 
-  puts "Edit Distance 1"
+  #puts "Edit Distance 1"
   #print_words(edits1_candidate)
   edits1_candidate =sort_words_by_popularity(edits1_candidate,word)
 
-  puts "Edit Distance 2"
+  #puts "Edit Distance 2"
   #print_words(edits2_candidate)
   edits2_candidate = sort_words_by_popularity(edits2_candidate,word)
 
@@ -80,45 +84,52 @@ def correct word
     edits2_candidate = score(edits2_candidate, edits2_candidate.length)
   end
 
-  puts "Top Five Words from ED1 & ED2 based on score \n"
+  #puts "Top Five Words from ED1 & ED2 based on score \n"
   select_top_five(edits1_candidate, edits2_candidate) 
-
-  #p NWORDS
 end
 
 #Finds the top five suggestion from edit distance one and two,
 #accoring to their scores.
 def select_top_five(ed1,ed2)
-  unless ed2.nil?
-    words = ed1.merge(ed2)  
+  if(ed1 == nil)
+    words = ed2 
+  elsif(ed2 == nil)
+    words = ed1
+  else
+    words = ed1.merge(ed2)
   end
-  words = ed1
   words.sort_by{|k,v| -v}
-  words  = words.first 5 
-  words.each { |k,v| 
-    print (String(v)+" "+String(NWORDS[k])+"  "+k+"\n")
+  words  = words.first 5
 
-  }
+  words_only = Array.new()
+  words.each{ |k,v|
+    words_only.push(k) 
+  }  
 
+  # words.each { |k,v| 
+  #   print (String(v)+" "+String(NWORDS[k])+"  "+k+"\n")
+  # }
+  
+  return words_only  #list of words 
+  #return word       #Hash of words and corresponding score 
 end
 
 # Calculates the socre for each correction candidate
 def score(words, len)
-  
   hash = Hash.new{}
   total_freq = 0
   words.each{|w|
     total_freq += NWORDS[w]
   }
-
   words.each{|w|
-    s = NWORDS[w]/(total_freq*len)*100
+    s = NWORDS[w]/(total_freq*len)
     hash[w] = s   
   }
-
   hash.sort_by{|k,v| -v}
+  hash.each{|k,v| 
+  #print (String(v)+" "+String(NWORDS[k])+"  "+k+"\n")
+  }
   return hash
-
 end
 
 def sort_words_by_popularity(words,word)
@@ -127,7 +138,7 @@ def sort_words_by_popularity(words,word)
     sorted_words = words.sort_by{|w| -NWORDS[w] }
     len = sorted_words
     array = sorted_words.first 10
-    print_words(array)
+    #print_words(array)
     return array
   end
 end
@@ -142,5 +153,3 @@ def print_words words
   end
   puts "\n\n"
 end
-
-correct('ana')
