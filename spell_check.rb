@@ -233,8 +233,8 @@ class SpellCheck
     correct
     CSV.open('output.csv', 'a') do |csv|
       @suggestion.each_with_index{|(name,score), index|
-        word =  @typed_name                             #typed name
-        sugges = name                                   #suggestion name
+        word =  @typed_name.capitalize                  #typed name
+        sugges = name.capitalize                        #suggestion name
         score = (@suggestion[name].round(3)).to_s       #score of this suggestion
         years = @year                                   #which years are inserted to dictionary
         ed = "NA"                                       #which ED this name belongs to
