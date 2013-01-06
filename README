@@ -1,0 +1,7 @@
+
+Read the instruction below.
+
+1) git pull https://github.com/bistaprad/Spell-Checker-.git
+2) cd Spell-Checker-
+3) ruby Spell.check.rb
+4) Open "output.csv" from spreadsheet
