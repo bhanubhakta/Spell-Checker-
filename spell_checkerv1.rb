@@ -2,19 +2,30 @@
 #  
 #    Score = Frequency/( total_freq * word_count_in_correction_list )
 
-
-require 'mysql' 
-
+#
 def train features
-  model = Hash.new(1)
-  features.each_hash{|h| 
-    model[h['name'].downcase] = (Float(h['freq']))
-    #puts Float(h['freq'])
-  }
+  model = Hash.new{}
+  total_freq = 0
 
-  return model
+  #count total frequency
+  features.each_line{|line|
+    splits = line.split(",")
+    total_freq += Integer(splits[2])
+  }
+  features.each_line{|line|
+    splits = line.split(",")
+
+    #Remove the dublicate entry of name and add the frequency while building the HASH
+    if model.has_key?(splits[0].downcase)  
+      model[splits[0].downcase] = ( Integer(splits[2]) + (model[splits[0].downcase]*total_freq) ) / Float(total_freq)
+    else
+      model[splits[0].downcase] = Integer(splits[2])/Float(total_freq)
+    end
+  }
+  return model 
 end
 
+#this method is used to full the data from MYSQL Database
 def database_connect
   con = Mysql.new('localhost', 'root', 'root', 'dob')
   rs = con.query('select * from name_freq')
@@ -23,9 +34,10 @@ def database_connect
   return rs
 end 
 
-NWORDS = train(database_connect)
+NWORDS = train(File.new('US_birth_name_frequencies/yob1882.txt').read)
 LETTERS = ("a".."z").to_a.join
 
+#
 def edits1 word
   n = word.length
   deletion = (0...n).collect {|i| word[0...i]+word[i+1..-1] }
@@ -37,7 +49,7 @@ def edits1 word
   result = deletion + transposition + alteration + insertion
   result.empty? ? nil : result
 end
-
+#
 def known_edits2 word
   result = []
   edits1(word).each {|e1| 
@@ -47,34 +59,28 @@ def known_edits2 word
   }
   result.empty? ? nil : result
 end
-
+#
 def known words
   result = words.find_all {|w| NWORDS.has_key?(w) }
   result.empty? ? nil : result
 end
 
 def correct word
-
-  unless (e1 = (known(edits1(word)))).nil? 
+  unless (e1 = (known(edits1(word)))).nil?
     e1 = (known(edits1(word))).uniq
-  end
- 
+  end 
   unless (e2 = (known_edits2(word))).nil? 
     e2 = (known_edits2(word)).uniq
   end
-
   if(word.length<= 3)
     e2 = nil
   end
-
-   puts "Entered Word"
-   puts word
-   puts
-
+  puts "Entered Word"
+  puts word
+  puts
   #puts "Edit Distance 1"
   #print_words(edits1_candidate)
   e1 =sort_words_by_popularity(e1,word)
-
   #puts "Edit Distance 2"
   #print_words(edits2_candidate)
   e2 = sort_words_by_popularity(e2,word)
@@ -89,7 +95,6 @@ def correct word
     e2 = edit2
   end
   end
-  
   total_freq = 0
   unless e1.nil?
     e1.each{|w|
@@ -101,15 +106,12 @@ def correct word
     total_freq += NWORDS[w]
   }
   end
-
   unless e1.nil?
     e1 = score(e1, word, total_freq)  
   end
-
   unless e2.nil?
     e2 = score(e2, word, total_freq)
   end
-
   puts "Top Five Words from ED1 & ED2 based on score \n"
   select_top_five(e1, e2,word) 
 end
@@ -202,4 +204,4 @@ def print_words words
   puts "\n\n"
 end
 
-correct("rose")
+correct("bonito")
