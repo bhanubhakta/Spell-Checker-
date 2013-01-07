@@ -1,13 +1,12 @@
 require 'csv'
 
 class SpellCheck
-	attr_accessor :typed_name, :count_ed1, :count_ed2, :ed1, :ed2, :weight_ed1, :weight_ed2
+	attr_reader :typed_name, :count_ed1, :count_ed2, :ed1, :ed2, :weight_ed1, :weight_ed2
 	attr_reader :working_dictionary, :suggestion, :ed1_tot_freq, :ed2_tot_freq, :total_freq, :year
   @@LETTERS
   @@dictionary
   
-  def initialize(name)
-    @typed_name = name.downcase
+  def initialize()
     @@dictionary = Hash.new(Hash.new)
     @working_dictionary = Hash.new
     @ed1_tot_freq = 0.0
@@ -18,7 +17,6 @@ class SpellCheck
     @weight_ed1 = 1
     @weight_ed2 = 0.1
     @suggestion = []
-    @year = []
     @@LETTERS = ("a".."z").to_a.join
     
     bulk_import # import name & freq from all files
@@ -27,7 +25,7 @@ class SpellCheck
 
   # Add which year is inserted in the @working_dictionary
   def add_year year
-    @year.push(year)
+    @year = year
   end
 
   #To import all the CSV files from a directory
@@ -58,28 +56,24 @@ class SpellCheck
     end
     features.each_line do |line|
       splits = line.split(",")
-      #Remove the dublicate entry of name and add the frequency while building the HASH
+      # Remove the dublicate entry of name and add the frequency while building the HASH
       if dict_by_year.has_key?(splits[0].downcase)  
-        dict_by_year[splits[0].downcase] = ( Integer(splits[2]) + (dict_by_year[splits[0].downcase]*total_freq) ) / Float(total_freq)
+        dict_by_year[splits[0].downcase] = ( (Integer(splits[2]) + (dict_by_year[splits[0].downcase]*total_freq) ) / Float(total_freq))
       else
-        dict_by_year[splits[0].downcase] = Integer(splits[2])/Float(total_freq)
-      end
+        dict_by_year[splits[0].downcase] = ( Integer(splits[2])/Float(total_freq))
+       end
+      # if dict_by_year.has_key?(splits[0].downcase)  
+      #   dict_by_year[splits[0].downcase] = Math.log10( (Integer(splits[2]) + (dict_by_year[splits[0].downcase]) ) )
+      # else
+      #   dict_by_year[splits[0].downcase] = Math.log10( Integer(splits[2])) 
+      # end
     end
     return dict_by_year
   end
 
   #Add the name and frequency by year to the working_dictionary
-  def add_year_to_dictionary year
-    add_year(year)
-    temp_dict = @@dictionary[year]
-    temp_dict.each do |key, value|
-      #Remove the dublicate entry of name and add the frequency while building the HASH
-      if @working_dictionary.has_key?(key)  
-        @working_dictionary[key] = (value + @working_dictionary[key])
-      else
-        @working_dictionary[key] = value
-      end
-    end
+  def add_year_to_dictionary(year)
+    @working_dictionary = @@dictionary[year]
   end
 
   def edits1 word
@@ -91,7 +85,7 @@ class SpellCheck
     insertion = []
     (n+1).times {|i| @@LETTERS.each_byte {|l| insertion << word[0...i]+l.chr+word[i..-1] } }
     result = deletion + transposition + alteration + insertion
-    result.empty? ? nil : result
+    
   end
 
   def known_edits2 word
@@ -101,47 +95,43 @@ class SpellCheck
         result << e2 if working_dictionary.has_key?(e2) 
       }
     }
-    result.empty? ? nil : result
+    result
+    # result.empty? ? nil : result
   end
 
   def known words
     result = words.find_all {|w| working_dictionary.has_key?(w) }
-    result.empty? ? nil : result
+    result
+    # result.empty? ? nil : result
   end
 
   #Finds the top five suggestion from edit distance one and two,
   #accoring to their scores.
-  def select_top_five  
-    if(@ed1 == nil)
-      words = @ed2 
-    elsif(@ed2 == nil)
-      words = @ed1
-    else
-      words = @ed1.merge(@ed2)
-    end
-    words = words.sort_by{|k,v| -v}.first 5
-    words = Hash[*words.flatten]
+  def select_top_five
+    ed1_ed2_merged = @ed1.merge(@ed2)
+    top5_words = ed1_ed2_merged.sort_by{|k,v| -v}.first 5
+    top5_words = Hash[*top5_words.flatten]
     final_list = Hash.new{}
     # If the typed_word isnt in the dictionary, replace 5th suggestion by typed_word 
     if !working_dictionary.has_key?( @typed_name )
-        words.each_with_index { |(k,v),index|
-          if index == (words.length-1)
+        top5_words.each_with_index { |(k,v),index|
+          if index == (top5_words.length-1)
             final_list[@typed_name] = v*0.5
           else
             final_list[k] = v
           end
         }
-        words = final_list
+        top5_words = final_list
     end
-    @suggestion = words
-    return words       #Hash of words and corresponding score 
+    @suggestion = top5_words
+    return top5_words       #Hash of words and corresponding score 
   end
 
-  # Calculates the socre for each edit distance suggestion list
-  def calc_score(words, total_freq, weight)
+  # Calculates the socre for each edit distance's suggestion list
+  def calc_score(word_list, total_freq, weight)
     hash = Hash.new{}
-    words.each{|w|
-      s = (weight * working_dictionary[w]/(total_freq*words.length)*100).round(4)
+    word_list.each{|w|
+      s = (weight * working_dictionary[w]/(total_freq)*100).round(4)
       hash[w] = s   
     }
     hash = hash.sort_by{|k,v| -v} 
@@ -150,27 +140,23 @@ class SpellCheck
   end
 
   def sort_top_n_words_by_frequency(words, n)
-    unless words.nil?
-      sorted_words = words.sort_by{|w| -working_dictionary[w] }
-      array = sorted_words.first n
-      return array
-    end
+    sorted_words = words.sort_by{|w| -working_dictionary[w] }
+    array = sorted_words.first n
+    return array
   end
 
   def correct
     # Get list non-repeated words with edit distances ONE
-    unless (@ed1 = (known(edits1( @typed_name )))).nil?
-      @ed1 = (known(edits1( @typed_name ))).uniq
-      @count_ed1 = @ed1.length
-    end 
+    @ed1 = (known(edits1( @typed_name ))).uniq
+    @count_ed1 = @ed1.length
+
     # Get list non-repeated words with edit distances TWO
-    unless (e2 = (known_edits2( @typed_name ))).nil? 
-      @ed2 = (known_edits2( @typed_name )).uniq
-      @count_ed2 = @ed2.length
-    end
+    @ed2 = (known_edits2( @typed_name )).uniq
+    @count_ed2 = @ed2.length
+
     # Ignore words with @ed2 for the word length of THREE
     if( @typed_name.length<= 3)
-      @ed2 = nil
+      @ed2 = []
     end
 
     # Sort the words in list accoring to frequency and grab only top 10 words
@@ -178,43 +164,39 @@ class SpellCheck
     @ed2 = sort_top_n_words_by_frequency(@ed2,10)
 
     # Remove the words from @ed2 which already appeared @ed1
-    unless @ed1.nil?
-    unless @ed2.nil?
-      edit2 = []
-      @ed2.each {|w|
-          if !@ed1.include?(w) 
-            edit2.push(w) 
-           end   
-      }
-      @ed2 = edit2
-    end
-    end
+    edit2 = []
+      @ed2.each do |w|
+        if !@ed1.include?(w) 
+          edit2.push(w) 
+        end   
+      end
+
+    @ed2 = edit2
 
     # Calculate total frequency for @ed1 array
-    unless @ed1.nil?
-      @ed1.each{|w|
-        @ed1_tot_freq += working_dictionary[w]
-      }
+    @ed1.each do |w|
+      @ed1_tot_freq += working_dictionary[w]
     end
 
     # Calculate total frequency for @ed2 array
-    unless @ed2.nil?
-      @ed2.each{|w|
+    @ed2.each do |w|
       @ed2_tot_freq += working_dictionary[w]
-    }
     end
+
     # total frequency of @ed1 & @ed2
     @total_freq = @ed1_tot_freq + @ed2_tot_freq
 
-    # Calculate score for each words in @ed1
-    unless @ed1.nil?
-      @ed1 = calc_score(@ed1, @ed1_tot_freq, @weight_ed1) 
+    if @count_ed1 > @count_ed2
+      weight  = Float(1)/@count_ed1
+    else 
+      weight = Float(1)/@count_ed2
     end
 
     # Calculate score for each words in @ed1
-    unless @ed2.nil?
-      @ed2 = calc_score(@ed2, @ed2_tot_freq, @weight_ed2)
-    end
+    @ed1 = calc_score(@ed1, @ed1_tot_freq , weight) 
+
+    # Calculate score for each words in @ed1
+    @ed2 = calc_score(@ed2, @ed2_tot_freq , weight*0.1)
 
     # Select top five suggestions from @ed1 & @ed1 
     select_top_five
@@ -251,7 +233,7 @@ class SpellCheck
         # Check which edit distance the word belongs to.
 
         # Check if the word is from @ed1
-        if !@ed1.nil?
+        if !@ed1.empty?
           if @ed1.include?(name)
             ed = 1.to_s
             ed_count = @count_ed1.to_s
@@ -259,7 +241,7 @@ class SpellCheck
         end
 
         # Check if the word is from @ed2
-        if !@ed2.nil?
+        if !@ed2.empty?
           if @ed2.include?(name)
             ed = 2.to_s
             ed_count = @count_ed2.to_s
@@ -279,26 +261,27 @@ class SpellCheck
     end
   end
 
+  def suggest_name(name, year)
+
+    @typed_name = name.downcase
+    @year = year                        #set the year 
+    add_year_to_dictionary(year)        #create a dictionary of given year
+    export_csv
+    
+  end
+
 end
 
-#List of test typed names
+# #List of test typed names
 test_case = ['Dalila','Haelen','Haabel','Marrk','Maccy','Hlen','Egenia','acy',
-            'Dcire','Hleen','Mable','Dicei','Hilin','Mabal','Maoy','Dlcie',
-            'Dark','Rogert','Decei','roth','rosa','evan','jelma','alv', 'rose']
+             'Dcire','Hleen','Mable','Dicei','Hilin','Mabal','Maoy','Dlcie',
+             'Dark','Rogert','Decei','roth','rosa','evan','jelma','alv', 'rose']
 
-# test_case = ['Dalila'] 
+spellcheck =SpellCheck.new()
 
-test_case.each{|word|
-    spellcheck = SpellCheck.new(word)
-
-    # Choose birth name by multiple year
-    spellcheck.add_year_to_dictionary(1990)
-    # spellcheck.add_year_to_dictionary(1882)
-    # spellcheck.add_year_to_dictionary(1883)
-    # spellcheck.add_year_to_dictionary(1884)
-
-    spellcheck.export_csv                 # Export to CSV file
-  }
+test_case.each do |w|
+  spellcheck.suggest_name(w, 1881)
+end
 
  
 
